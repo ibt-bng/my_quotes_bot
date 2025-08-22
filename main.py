@@ -1,60 +1,93 @@
-import logging
-import os
-import random
-import datetime
-from googletrans import Translator
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+)
+import logging
 
-# Логирование
+# Enable logging (for debugging)
 logging.basicConfig(level=logging.INFO)
 
-TOKEN = os.getenv("BOT_TOKEN")
-translator = Translator()
+# Portfolio Data
+PORTFOLIO = {
+    "about": "👋 Hi, I'm Alex! A full-stack developer with a passion for creating awesome web apps.",
+    "skills": "🛠 Python, JavaScript, React, Django, Docker, PostgreSQL",
+    "projects": [
+        {"name": "Portfolio Website", "url": "https://yourportfolio.com"},
+        {"name": "Task Manager App", "url": "https://github.com/you/taskapp"},
+    ],
+    "resume_url": "https://yourportfolio.com/resume.pdf",
+    "contact": "📧 Email: you@example.com\n📱 Telegram: @yourhandle"
+}
 
-# Загружаем цитаты
-with open("quotes.txt", "r", encoding="utf-8") as f:
-    quotes = [line.strip() for line in f if line.strip()]
 
-# Храним последнюю отправленную цитату
-last_quote = None
+# Create the main menu as inline keyboard
+def get_main_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📄 About", callback_data="about")],
+        [InlineKeyboardButton("💼 Projects", callback_data="projects")],
+        [InlineKeyboardButton("🧠 Skills", callback_data="skills")],
+        [InlineKeyboardButton("📎 Resume", callback_data="resume")],
+        [InlineKeyboardButton("📬 Contact", callback_data="contact")],
+    ])
 
+
+# Back to menu button
+def back_to_menu_button():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Back to Menu", callback_data="menu")]
+    ])
+
+
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я буду каждый день в 10:00 отправлять тебе цитату.")
+    await update.message.reply_text("Welcome! Choose an option:", reply_markup=get_main_menu())
 
-async def send_daily_quote(context: ContextTypes.DEFAULT_TYPE):
-    global last_quote
-    last_quote = random.choice(quotes)
-    
-    keyboard = [
-        [InlineKeyboardButton("Перевести", callback_data="translate")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await context.bot.send_message(chat_id=os.getenv("CHAT_ID"), text=last_quote, reply_markup=reply_markup)
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Callback handler
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    global last_quote
+    data = query.data
 
-    if query.data == "translate" and last_quote:
-        translated = translator.translate(last_quote, dest="en").text
-        await query.edit_message_text(f"{last_quote}\n\nПеревод: {translated}")
+    if data == "menu":
+        await query.edit_message_text("Choose an option:", reply_markup=get_main_menu())
 
+    elif data == "about":
+        await query.edit_message_text(PORTFOLIO["about"], reply_markup=back_to_menu_button())
+
+    elif data == "projects":
+        msg = "💼 Projects:\n"
+        for p in PORTFOLIO["projects"]:
+            msg += f"🔗 {p['name']}: {p['url']}\n"
+        await query.edit_message_text(msg, reply_markup=back_to_menu_button())
+
+    elif data == "skills":
+        await query.edit_message_text(PORTFOLIO["skills"], reply_markup=back_to_menu_button())
+
+    elif data == "resume":
+        await query.edit_message_text(f"📎 Download my resume:\n{PORTFOLIO['resume_url']}", reply_markup=back_to_menu_button())
+
+    elif data == "contact":
+        await query.edit_message_text(PORTFOLIO["contact"], reply_markup=back_to_menu_button())
+
+    else:
+        await query.edit_message_text("❓ Unknown option", reply_markup=back_to_menu_button())
+
+
+# Main runner
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    # Планировщик
-    scheduler = AsyncIOScheduler(timezone="Asia/Dushanbe")
-    scheduler.add_job(send_daily_quote, 'cron', hour=10, minute=0, args=[app.bot])
-    scheduler.start()
+    app = ApplicationBuilder().token("8497518526:AAFWvZm6y2wkKV8kbPyDOR_7YcFhPpkoKuo").build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CallbackQueryHandler(handle_button))
 
+    print("Bot is running...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
+
